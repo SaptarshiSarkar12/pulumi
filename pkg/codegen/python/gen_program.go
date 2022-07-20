@@ -393,7 +393,7 @@ func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions) (*model.Bloc
 		appendOption("provider", opts.Provider)
 	}
 	if opts.Version != nil {
-		appendOption("Version", opts.Version)
+		appendOption("version", opts.Version)
 	}
 	if opts.DependsOn != nil {
 		appendOption("depends_on", opts.DependsOn)

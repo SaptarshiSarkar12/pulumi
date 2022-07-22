@@ -19,6 +19,7 @@
 - [codegen] Reduce time to execute `pulumi convert` and some YAML programs, depending on providers used, by up to 3 seconds.
   [#10444](https://github.com/pulumi/pulumi/pull/10444)
 
+
 - [sdk/nodejs] Added stack truncation to `SyntaxError` in nodejs.
   [#10465](https://github.com/pulumi/pulumi/pull/10465)
 
@@ -30,6 +31,10 @@
 
 - [sdk/go] Improve error messages for `StackReference`s
   [#10477](https://github.com/pulumi/pulumi/pull/10477)
+
+- [codegen/schema] Support options.version on pulumi convert
+  [#10194](https://github.com/pulumi/pulumi/pull/10194)
+
 
 ### Bug Fixes
 

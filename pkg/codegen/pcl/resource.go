@@ -33,8 +33,6 @@ type ResourceOptions struct {
 	Parent model.Expression
 	// The provider to use.
 	Provider model.Expression
-	// The provider version to use.
-	Version model.Expression
 	// The explicit dependencies of the resource.
 	DependsOn model.Expression
 	// Whether or not the resource is protected.

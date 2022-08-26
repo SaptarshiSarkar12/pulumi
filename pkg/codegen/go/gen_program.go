@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/iancoleman/strcase"
 
@@ -111,7 +112,7 @@ func GenerateProgramWithOptions(program *pcl.Program, opts GenerateProgramOption
 	}
 
 	for _, n := range nodes {
-		g.genNode(&progPostamble, n)
+		g.genNode(&progPostamble, n, program.Packages())
 	}
 
 	g.genPostamble(&progPostamble, nodes)
@@ -535,10 +536,10 @@ func (g *generator) genHelpers(w io.Writer) {
 	}
 }
 
-func (g *generator) genNode(w io.Writer, n pcl.Node) {
+func (g *generator) genNode(w io.Writer, n pcl.Node, packages *[]schema.Package) {
 	switch n := n.(type) {
 	case *pcl.Resource:
-		g.genResource(w, n)
+		g.genResource(w, n, packages)
 	case *pcl.OutputVariable:
 		g.genOutputAssignment(w, n)
 	case *pcl.ConfigVariable:
@@ -550,7 +551,8 @@ func (g *generator) genNode(w io.Writer, n pcl.Node) {
 
 var resourceType = model.NewOpaqueType("pulumi.Resource")
 
-func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions) (*model.Block, []interface{}) {
+func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string,
+	packages *[]schema.Package) (*model.Block, []interface{}) {
 	if opts == nil {
 		return nil, nil
 	}
@@ -582,7 +584,18 @@ func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions) (*model.Bloc
 		appendOption("Provider", opts.Provider, model.DynamicType)
 	}
 	if opts.Version != nil {
-		appendOption("Version", opts.Version, model.StringType)
+		// wip idea:
+		for _, p := range *packages {
+			if p.Name == pkg {
+				if p.Version == nil {
+					p.Version = semver.Version{
+						// set to opts.version
+					}
+				} else {
+					// else conflict, how to handle?
+				}
+			}
+		}
 	}
 	if opts.DependsOn != nil {
 		appendOption("DependsOn", opts.DependsOn, model.NewListType(resourceType))
@@ -608,7 +621,7 @@ func (g *generator) genResourceOptions(w io.Writer, block *model.Block) {
 	}
 }
 
-func (g *generator) genResource(w io.Writer, r *pcl.Resource) {
+func (g *generator) genResource(w io.Writer, r *pcl.Resource, packages *[]schema.Package) {
 
 	resName, resNameVar := r.LogicalName(), makeValidIdentifier(r.Name())
 	pkg, mod, typ, _ := r.DecomposeToken()
@@ -622,7 +635,7 @@ func (g *generator) genResource(w io.Writer, r *pcl.Resource) {
 	}
 
 	// Compute resource options
-	options, temps := g.lowerResourceOptions(r.Options)
+	options, temps := g.lowerResourceOptions(r.Options, pkg, packages)
 	g.genTemps(w, temps)
 
 	// Add conversions to input properties

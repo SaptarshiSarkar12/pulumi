@@ -112,7 +112,7 @@ func GenerateProgramWithOptions(program *pcl.Program, opts GenerateProgramOption
 	}
 
 	for _, n := range nodes {
-		g.genNode(&progPostamble, n, program.Packages())
+		g.genNode(&progPostamble, n)
 	}
 
 	g.genPostamble(&progPostamble, nodes)
@@ -536,10 +536,10 @@ func (g *generator) genHelpers(w io.Writer) {
 	}
 }
 
-func (g *generator) genNode(w io.Writer, n pcl.Node, packages []*schema.Package) {
+func (g *generator) genNode(w io.Writer, n pcl.Node) {
 	switch n := n.(type) {
 	case *pcl.Resource:
-		g.genResource(w, n, packages)
+		g.genResource(w, n)
 	case *pcl.OutputVariable:
 		g.genOutputAssignment(w, n)
 	case *pcl.ConfigVariable:
@@ -551,8 +551,7 @@ func (g *generator) genNode(w io.Writer, n pcl.Node, packages []*schema.Package)
 
 var resourceType = model.NewOpaqueType("pulumi.Resource")
 
-func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string,
-	packages []*schema.Package) (*model.Block, []interface{}) {
+func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string) (*model.Block, []interface{}) {
 	if opts == nil {
 		return nil, nil
 	}
@@ -584,20 +583,7 @@ func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string,
 		appendOption("Provider", opts.Provider, model.DynamicType)
 	}
 	if opts.Version != nil {
-		// opts.Version.Evaluate()
-		// getSemverVersion(opts.Version.Value)
-		// // wip idea:
-		for _, p := range packages {
-			if p.Name == pkg {
-				p.Version = &semver.Version{Major: 5, Minor: 15}
-				// 	p.Version = semver.Version{
-				// 		// set to opts.version
-				// 	}
-				// } else {
-				// 	// else conflict, how to handle?
-				// }
-			}
-		}
+		SetHighestPackageVersion(&opts.Version, pkg, g.program.Packages())
 		appendOption("Version", opts.Version, model.StringType)
 
 	}
@@ -625,7 +611,7 @@ func (g *generator) genResourceOptions(w io.Writer, block *model.Block) {
 	}
 }
 
-func (g *generator) genResource(w io.Writer, r *pcl.Resource, packages []*schema.Package) {
+func (g *generator) genResource(w io.Writer, r *pcl.Resource) {
 
 	resName, resNameVar := r.LogicalName(), makeValidIdentifier(r.Name())
 	pkg, mod, typ, _ := r.DecomposeToken()
@@ -639,7 +625,7 @@ func (g *generator) genResource(w io.Writer, r *pcl.Resource, packages []*schema
 	}
 
 	// Compute resource options
-	options, temps := g.lowerResourceOptions(r.Options, pkg, packages)
+	options, temps := g.lowerResourceOptions(r.Options, pkg)
 	g.genTemps(w, temps)
 
 	// Add conversions to input properties
@@ -965,4 +951,21 @@ func programPackageDefs(program *pcl.Program) ([]*schema.Package, error) {
 		defs[i] = def
 	}
 	return defs, nil
+}
+
+func SetHighestPackageVersion(versionExpr *model.Expression, pkg string, packages []*schema.Package) {
+	if tExpr, ok := (*versionExpr).(*model.TemplateExpression); ok {
+		versionString := tExpr.Parts[0].(*model.LiteralValueExpression).Value.AsString()
+		version, err := semver.Make(versionString)
+		if err == nil {
+			for _, p := range packages {
+				if p.Name == pkg {
+					if version.Compare(*p.Version) == 1 {
+						p.Version = &version
+					}
+				}
+			}
+		}
+
+	}
 }

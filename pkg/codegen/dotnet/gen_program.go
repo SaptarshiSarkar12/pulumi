@@ -22,6 +22,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/blang/semver"
+
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
@@ -572,7 +574,7 @@ func (g *generator) makeResourceName(baseName, count string) string {
 	return fmt.Sprintf("$\"%s-{%s}\"", baseName, count)
 }
 
-func (g *generator) genResourceOptions(opts *pcl.ResourceOptions) string {
+func (g *generator) genResourceOptions(opts *pcl.ResourceOptions, pkg string) string {
 	if opts == nil {
 		return ""
 	}
@@ -612,7 +614,7 @@ func (g *generator) genResourceOptions(opts *pcl.ResourceOptions) string {
 		appendOption("Provider", opts.Provider)
 	}
 	if opts.Version != nil {
-		appendOption("Version", opts.Version)
+		SetHighestPackageVersion(&opts.Version, pkg, g.program.Packages())
 	}
 	if opts.DependsOn != nil {
 		appendOption("DependsOn", opts.DependsOn)
@@ -675,7 +677,7 @@ func (g *generator) genResource(w io.Writer, r *pcl.Resource) {
 					g.Fgenf(w, " %.v,\n", attr.Value)
 				}
 			})
-			g.Fgenf(w, "%s}%s)", g.Indent, g.genResourceOptions(r.Options))
+			g.Fgenf(w, "%s}%s)", g.Indent, g.genResourceOptions(r.Options, r.Schema.Package.Name))
 		}
 	}
 
@@ -774,4 +776,21 @@ func (g *generator) genNYI(w io.Writer, reason string, vs ...interface{}) {
 		Detail:   message,
 	})
 	g.Fgenf(w, "\"TODO: %s\"", fmt.Sprintf(reason, vs...))
+}
+
+func SetHighestPackageVersion(versionExpr *model.Expression, pkg string, packages []*schema.Package) {
+	if tExpr, ok := (*versionExpr).(*model.TemplateExpression); ok {
+		versionString := tExpr.Parts[0].(*model.LiteralValueExpression).Value.AsString()
+		version, err := semver.Make(versionString)
+		if err == nil {
+			for _, p := range packages {
+				if p.Name == pkg {
+					if version.Compare(*p.Version) == 1 {
+						p.Version = &version
+					}
+				}
+			}
+		}
+
+	}
 }

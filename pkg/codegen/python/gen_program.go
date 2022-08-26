@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/blang/semver"
+
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
@@ -361,7 +363,7 @@ func (g *generator) makeResourceName(baseName, count string) string {
 	return fmt.Sprintf(`f"%s-{%s}"`, baseName, count)
 }
 
-func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions) (*model.Block, []*quoteTemp) {
+func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string) (*model.Block, []*quoteTemp) {
 	if opts == nil {
 		return nil, nil
 	}
@@ -393,7 +395,8 @@ func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions) (*model.Bloc
 		appendOption("provider", opts.Provider)
 	}
 	if opts.Version != nil {
-		appendOption("version", opts.Version)
+		SetHighestPackageVersion(&opts.Version, pkg, g.program.Packages())
+
 	}
 	if opts.DependsOn != nil {
 		appendOption("depends_on", opts.DependsOn)
@@ -434,8 +437,7 @@ func (g *generator) genResourceOptions(w io.Writer, block *model.Block, hasInput
 func (g *generator) genResource(w io.Writer, r *pcl.Resource) {
 	qualifiedMemberName, diagnostics := resourceTypeName(r)
 	g.diagnostics = append(g.diagnostics, diagnostics...)
-
-	optionsBag, temps := g.lowerResourceOptions(r.Options)
+	optionsBag, temps := g.lowerResourceOptions(r.Options, r.Schema.Package.Name)
 
 	name := r.LogicalName()
 	nameVar := PyName(r.Name())
@@ -589,4 +591,21 @@ func (g *generator) genNYI(w io.Writer, reason string, vs ...interface{}) {
 		Detail:   message,
 	})
 	g.Fgenf(w, "(lambda: raise Exception(%q))()", fmt.Sprintf(reason, vs...))
+}
+
+func SetHighestPackageVersion(versionExpr *model.Expression, pkg string, packages []*schema.Package) {
+	if tExpr, ok := (*versionExpr).(*model.TemplateExpression); ok {
+		versionString := tExpr.Parts[0].(*model.LiteralValueExpression).Value.AsString()
+		version, err := semver.Make(versionString)
+		if err == nil {
+			for _, p := range packages {
+				if p.Name == pkg {
+					if version.Compare(*p.Version) == 1 {
+						p.Version = &version
+					}
+				}
+			}
+		}
+
+	}
 }

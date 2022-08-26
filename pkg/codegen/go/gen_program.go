@@ -536,7 +536,7 @@ func (g *generator) genHelpers(w io.Writer) {
 	}
 }
 
-func (g *generator) genNode(w io.Writer, n pcl.Node, packages *[]schema.Package) {
+func (g *generator) genNode(w io.Writer, n pcl.Node, packages []*schema.Package) {
 	switch n := n.(type) {
 	case *pcl.Resource:
 		g.genResource(w, n, packages)
@@ -552,7 +552,7 @@ func (g *generator) genNode(w io.Writer, n pcl.Node, packages *[]schema.Package)
 var resourceType = model.NewOpaqueType("pulumi.Resource")
 
 func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string,
-	packages *[]schema.Package) (*model.Block, []interface{}) {
+	packages []*schema.Package) (*model.Block, []interface{}) {
 	if opts == nil {
 		return nil, nil
 	}
@@ -584,18 +584,22 @@ func (g *generator) lowerResourceOptions(opts *pcl.ResourceOptions, pkg string,
 		appendOption("Provider", opts.Provider, model.DynamicType)
 	}
 	if opts.Version != nil {
-		// wip idea:
-		for _, p := range *packages {
+		// opts.Version.Evaluate()
+		// getSemverVersion(opts.Version.Value)
+		// // wip idea:
+		for _, p := range packages {
 			if p.Name == pkg {
-				if p.Version == nil {
-					p.Version = semver.Version{
-						// set to opts.version
-					}
-				} else {
-					// else conflict, how to handle?
-				}
+				p.Version = &semver.Version{Major: 5, Minor: 15}
+				// 	p.Version = semver.Version{
+				// 		// set to opts.version
+				// 	}
+				// } else {
+				// 	// else conflict, how to handle?
+				// }
 			}
 		}
+		appendOption("Version", opts.Version, model.StringType)
+
 	}
 	if opts.DependsOn != nil {
 		appendOption("DependsOn", opts.DependsOn, model.NewListType(resourceType))
@@ -621,7 +625,7 @@ func (g *generator) genResourceOptions(w io.Writer, block *model.Block) {
 	}
 }
 
-func (g *generator) genResource(w io.Writer, r *pcl.Resource, packages *[]schema.Package) {
+func (g *generator) genResource(w io.Writer, r *pcl.Resource, packages []*schema.Package) {
 
 	resName, resNameVar := r.LogicalName(), makeValidIdentifier(r.Name())
 	pkg, mod, typ, _ := r.DecomposeToken()
